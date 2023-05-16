@@ -1,0 +1,496 @@
+---
+title: "Empirical-Final-Project-Research"
+author: "Hassan Fayyaz | Adeel Arshid | Tanmay Thomas"
+date: "5/24/2022"
+output: pdf_document
+---
+  
+'Topic: Socioeconomic Factors Affecting Health Insurance In The United States
+
+Professor John Schmitz
+
+Foundations of Empirical Research (ECO B2100)
+
+The City College of New York'
+
+'Introduction:
+
+This research study involves data set of individuals
+who have health insurance and those without health insurance. 
+Some critical variables of the data set are age, gender, 
+marital status, race, education, and household income. 
+This research study aims to analyze the impact of these variables
+and predict the likelihood of someone having health insurance 
+based on the variables. '
+
+
+install.packages("tidyverse", dependencies = TRUE)
+
+
+install.packages("randomForest")
+
+install.packages("corrplot")
+
+install.packages("haven") #,repos = "http://cran.us.r-project.org"
+
+install.packages("gridExtra") #repos = "http://cran.us.r-project.org"
+
+install.packages("Boruta") #,repos = "http://cran.us.r-project.org"
+
+install.packages("tinytex") #,repos = "http://cran.us.r-project.org"
+
+install.packages("latexextra") #,repos = "http://cran.us.r-project.org"
+
+
+library(ggplot2)
+library(stats)
+library(dplyr)
+library(randomForest)
+library(corrplot)
+library(haven)
+library(AER)
+library(foreign)
+library(nnet)
+library(reshape2)
+library(tidyverse)
+library(stargazer)
+library(ggeffects)
+library(gridExtra)
+library(readr)
+library(readxl)
+library(janitor)
+library(skimr)
+library(plotly)
+library(tidyr)
+library(lubridate)
+library(rmarkdown)
+library(flexdashboard)
+library(DT)
+library(ggforce)
+library(tinytex)
+library(sjPlot)
+
+
+
+rm(list = ls(all = TRUE))
+
+setwd("C:/Users/hassa/Desktop/Empirical_Data")
+
+require("ipumsr")
+
+ddi <- read_ipums_ddi("nhis_00002.xml")
+data <- read_ipums_micro(ddi)
+
+#######################################################
+
+#               Cleaning Data Set
+
+#######################################################
+
+data$REGION <- as.factor(data$REGION)
+levels(data$REGION) <- c("Northeast","Midwest","South","West")
+
+data$SEX <- as.factor(data$SEX)
+levels(data$SEX) <- c("Male","Female","Refused","dont know")
+
+data$SEXORIEN <- as.factor(data$SEXORIEN)
+levels(data$SEXORIEN) <- c("NIU","Lesbian or gay","straight","bisexual","something else","dont know","refused","NA")
+
+data$MARST <- as.factor(data$MARST)
+levels(data$MARST) <- c("NIU","Married","Married spouse not there","Married spouse NA","Widowed","Divorced","Separated","never married","unknown")
+
+data$RACEA <- as.factor(data$RACEA)
+levels(data$RACEA) <- c("white","Black","Aleut Alaskan","American Indian","Asian","Other","refused","not ascertained","unknown")
+
+data$HISPETH <- as.factor(data$HISPETH)
+levels(data$HISPETH) <- c("Not Hispanic","Mexican","Other Hispanic","NA")
+
+data$YRSINUS <- as.factor(data$YRSINUS)
+levels(data$YRSINUS) <- c("NIU","Less than 1 year in US","1-5 years in US","5-10 years in US","10-15 yr in US","15 or more yr in US","NA")
+
+data$CITIZEN <- as.factor(data$CITIZEN)
+levels(data$CITIZEN) <- c("No not US citizen","yes US citizen","refused","NA","dont know")
+
+data$ARMFEV <- as.factor(data$ARMFEV)
+levels(data$ARMFEV) <- c("NIU","No never active duty","active only for training","yes ever served in armed forces","refused","NA","dont know")
+
+data$EDUC <- as.factor(data$EDUC)
+levels(data$EDUC) <- c("NIU","no school","less than hs","12th grade no diploma","HS diploma","GED","some college","assoc deg in tech or occ","assoc deg academic","bachelors","masters","professional degree","doctoral","refused","dont know")
+
+data$EMPSTAT <- as.factor(data$EMPSTAT)
+levels(data$EMPSTAT) <- c("NIU","Employed","not employed","dont know")
+
+data$EMPHI <- as.factor(data$EMPHI)
+levels(data$EMPHI) <- c("NIU","no workplace did not offer health insurance","yes workplace offer health insurance","refused","NA","dont know")
+
+data$EMPFT <- as.factor(data$EMPFT)
+levels(data$EMPFT) <- c("NIU","parttime","fulltime","refused","NA","dont know")
+
+data$HEALTH <- as.factor(data$HEALTH)
+levels(data$HEALTH) <- c("excellent","very good","good","fair","poor","refused","dont know")
+
+
+is.na(data$HOURSWRK) <- which(data$HOURSWRK > 95)  # hours of work each week
+is.na(data$HEIGHT) <- which(data$HEIGHT > 94)  # height in inches
+is.na(data$WEIGHT) <- which(data$WEIGHT > 900)  # weight in pounds
+is.na(data$BMICALC) <- which(data$BMICALC > 900)  # BMI Body Mass Index
+
+data$HINOTCOVE <- as.factor(data$HINOTCOVE)
+levels(data$HINOTCOVE) <- c("has health insurance coverage","no health insurance coverage","dont know")
+
+data$EMPSTAT<-as.factor(data$EMPSTAT)
+levels(data$EMPSTAT)<-c("not employed","employed","dont know","NIU")
+
+library(dplyr)
+mydata= select(data,-c("YEAR","SERIAL","STRATA","PSU","NHISHID","NHISPID","HHX"))
+
+#######################
+
+# Viewing Data
+
+#######################
+
+str(mydata)
+
+View(mydata)
+
+summary(mydata)
+
+colnames(mydata)
+
+nrow(mydata)
+
+sum(is.na(mydata))
+mydata= na.omit(mydata)#removing all missing values
+
+
+######################################
+
+# Exploratory Data Analysis
+
+######################################
+
+'If the calculated value is greater than the critical value, 
+then we need to reject the null hypothesis & if the computed 
+value is less than the critical value, then we fail to reject 
+the null hypothesis'
+
+
+######################################
+#1 Health Insurance By Race
+######################################
+
+
+sjPlot::tab_xtab(var.row=data$RACEA, 
+                   var.col =data$HINOTCOVE,
+                   title = "Health Insurance By Race",
+                   show.row.prc = TRUE)
+
+ggplot(data,
+           aes(x= RACEA, y=HINOTCOVE)) +
+      geom_bar(stat = "identity", width=0.5, color="Green") + labs(x = "Race", y = "Health Insurance Status")+
+      geom_line(color = "firebrick", linetype = "dotted", size = .3) +
+      ggtitle("Health Insurance By Race")
+
+######################################
+#2 Health Insurance By Sex
+######################################
+
+sjPlot::tab_xtab(var.row=data$SEX, 
+                   var.col =data$HINOTCOVE,
+                   title = "Health Insurance By Sex",
+                   show.row.prc = TRUE,drop.empty = TRUE)
+
+sjPlot::plot_xtab(data$HINOTCOVE, data$SEX, type = c("bar", "line"),
+                      margin = "row",  title = "Health Insurance By Sex",
+                      bar.pos = "stack", coord.flip = TRUE)
+    
+########################################
+#3 Health Insurance By Citizenship Status
+########################################
+
+sjPlot::tab_xtab(var.row = data$CITIZEN, 
+                   var.col = data$HINOTCOVE,
+                   title = "Health Insurance By Citizenship Status",
+                   show.row.prc = TRUE)
+
+ggplot(data,
+           aes(x= CITIZEN, y=HINOTCOVE)) +
+      geom_point(color = "firebrick", shape = "diamond", size = 2)+ labs(x = "Citizen", y = "Health Insurance Status")+
+      geom_line(color = "firebrick", linetype = "dotted", size = .3) +
+      ggtitle("Health Insurance by Citzenship")
+
+########################################
+#4 Health Insurance by Sexual Orientation
+########################################
+
+sjPlot::tab_xtab(var.row = data$SEXORIEN, 
+                   var.col = data$HINOTCOVE,
+                   title = "Table Health insuracne by sex orientation",
+                   show.row.prc = TRUE)
+
+ggplot(data, aes(x=SEXORIEN, y=HINOTCOVE)) + 
+      geom_bar(stat = "identity", width=0.5, color="Purple") + labs(x = "Sexual Orientation", y = "Health Insurance Status")+
+      geom_line(color = "firebrick", linetype = "dotted", size = .3) +
+      ggtitle("Health insurance by Sexual Orientation")
+
+###############################################################
+#5 Health Insurance Based On US Military Service
+###############################################################
+
+sjPlot::tab_xtab(var.row = data$ARMFEV, 
+                   var.col = data$HINOTCOVE,
+                   title = "Health Insurance Based On US Military Service",
+                   show.row.prc = TRUE)
+
+ggplot(data, aes(x=ARMFEV, y=HINOTCOVE)) + 
+      geom_bar(stat = "identity", width=0.5, color="Pink") + labs(x = "Military Service", y = "Health Insurance Status")+
+      geom_line(linetype = "dotted", size = .3) +
+      ggtitle("Health Insurance Based On US Military Service")
+
+##########################################################
+#6 Health Insurance By Years Lived In The United States
+##########################################################
+
+sjPlot::tab_xtab(var.row = data$YRSINUS, 
+                   var.col = data$HINOTCOVE,
+                   title = "Health Insurance By Years Lived In The United States",
+                   show.row.prc = TRUE)
+  
+ggplot(data, aes(fill=HINOTCOVE, y=YRSINUS, x=HINOTCOVE)) + 
+      geom_bar(position="dodge", stat="identity") + labs(x = "Health Insurance Status", y = "Years Lived In The United States") +
+      ggtitle("Health insurance by RACE")
+
+############################################
+#7 Health Insurance By Employment Status
+############################################
+
+sjPlot::tab_xtab(var.row = data$EMPSTAT, 
+                   var.col = data$HINOTCOVE,
+                   title = "Health Insurance By Employment Status",
+                   show.row.prc = TRUE)
+
+ggplot(aes(x= EMPSTAT, 
+           y= HINOTCOVE, 
+           color=EMPSTAT), data = data)+
+  geom_point()+
+  geom_smooth(method="lm", se=FALSE) + 
+  facet_wrap(~EMPSTAT + HINOTCOVE) +
+  ggtitle("Health Insurance By Employment Status")
+
+
+##################################################
+#8 Health Insurance By US Born Citizenship Status 
+##################################################
+
+sjPlot::tab_xtab(var.row = data$USBORN, 
+                   var.col = data$HINOTCOVE,
+                   title = "Health Insurance By US Born Citizenship Status",
+                   show.row.prc = TRUE)
+
+ggplot(data,
+           aes(x= USBORN, y =HINOTCOVE)) +
+      geom_point(color = "firebrick", shape = "diamond", size = 2)+
+      ggtitle("Health Insurance By US Born Citizenship Status")+
+      xlab("USBORN")+
+      ylab("HINOTCOVE")
+
+################################################################
+#9 Health Insurance By Whether Workplace Offers Health Insurance 
+################################################################
+
+sjPlot::tab_xtab(var.row = data$EMPHI, 
+                   var.col = data$HINOTCOVE,
+                   title = "Health Insurance By Whether Workplace Offers Health Insurance",
+                   show.row.prc = TRUE)
+
+ggplot(aes(x= EMPHI, y=HINOTCOVE), data=data)+ geom_point()+
+      facet_grid(HINOTCOVE ~ EMPHI) +
+      xlab("Workplace Offers Health Insurance") + 
+      ylab("Health Insurance Status")
+    
+############################################
+#10 Health Insurance By Health Status
+############################################
+
+sjPlot::tab_xtab(var.row = data$HEALTH, 
+                   var.col = data$HINOTCOVE,
+                   title = "Health Insurance By Health Status",
+                   show.row.prc = TRUE)
+
+ggplot(data, aes(x=HEALTH, y=HINOTCOVE)) + 
+      geom_bar(stat = "identity", width=0.2, color="Black")+
+      xlab("Health Condition") + 
+      ylab("Health Insurance Status")+
+      ggtitle("Health Insurance By Health Status")
+
+###############################################
+#11 Health Insurance By Medicaid Status
+###############################################
+
+sjPlot::tab_xtab(var.row = data$HIMCAIDE, 
+                   var.col = data$HINOTCOVE,
+                   title = "Health Insurance By Medicaid Status",
+                   show.row.prc = TRUE)
+
+ggplot(data,
+           aes(x= HIMCAIDE, y= HINOTCOVE)) + geom_point(color= "Black", alpha = 2) + labs(x = "Medicaid Status", y = "Health Insurance Status") + 
+      
+      stat_smooth() +
+      theme(panel.grid.major = element_line(size = .1, linetype = "dashed"),
+            panel.grid.minor = element_line(size = .2, linetype = "dotted"),
+            panel.grid.major.x = element_line(color = "red1"),
+            panel.grid.major.y = element_line(color = "blue1"),
+            panel.grid.minor.x = element_line(color = "red4"),
+            panel.grid.minor.y = element_line(color = "blue4"))+
+      ggtitle("Health Insurance By Medicaid Status") 
+    
+    xlab("")
+    
+#################################################
+#12 Health Insurance By Medicare Status
+#################################################
+    
+sjPlot::tab_xtab(var.row = data$HIMCAREE, 
+                       var.col = data$HINOTCOVE,
+                       title = "Health Insurance By Medicare Status",
+                       show.row.prc = TRUE)
+    
+ggplot(data,
+               aes(x= HIMCAREE, y= HINOTCOVE)) + geom_point() + labs(x = "Medicare Status", y = "Health Insurance Status")+
+          geom_violin(draw_quantiles   = c(.25, .5, .75))+
+          geom_jitter(aes(y= HINOTCOVE,
+                          x= HIMCAREE),
+                      color="Purple",
+                      height = 0,
+                      width=0.5, alpha=100)+
+          
+          ggtitle("Health Insurance By Medicare Status")
+        xlab("")
+        
+#########################################################
+#13 Health Insurance By Years Lived In The United States
+#########################################################
+        
+sjPlot::tab_xtab(var.row = data$YRSINUS, 
+                           var.col = data$HINOTCOVE,
+                           title = "Health Insurance By Years Lived In The United States",
+                           show.row.prc = TRUE)
+
+            ggplot(aes(x= YRSINUS, 
+                       y= HINOTCOVE, 
+                       color=YRSINUS), data = data)+
+              geom_point()+
+              geom_smooth(method="lm", se=FALSE) + 
+              facet_wrap(~YRSINUS + HINOTCOVE) +
+              ggtitle("Health Insurance by Years lived in the United States")
+
+#######################################
+            
+# LOGISTIC REGRESSION
+
+#######################################
+            
+# The dependent variable health insurance "HINOTCOVE" has 3 levels, thus will be recoded 
+# to include 2 levels in order to fit a logistic regression model
+
+mydata$H_insurance = ifelse(mydata$HINOTCOVE == "has health insurance coverage","has  insurance coverage","no insurance") #drop the - HINOTCOVE
+colnames(mydata)
+
+table(mydata$H_insurance)
+class(mydata$H_insurance)
+mydata$H_insurance = as.factor(mydata$H_insurance)
+
+mydata = mydata[,-c(1:9)]
+
+dim(mydata) #this is a very big dataset with 31176 rows and 45 columns
+
+sample_size = floor(0.01*nrow(mydata))
+set.seed(777)
+picked = sample(seq_len(nrow(mydata)),size = sample_size)
+mydata_sample =mydata[picked,]
+dim(mydata_sample)
+
+library(Boruta)
+set.seed(123)
+boruta.train <- Boruta(H_insurance~. ,data = mydata_sample, doTrace = 2)
+print(boruta.train)
+
+plot(boruta.train, xlab = "", xaxt = "n")
+lz<-lapply(1:ncol(boruta.train$ImpHistory),function(i)
+  boruta.train$ImpHistory[is.finite(boruta.train$ImpHistory[,i]),i])
+names(lz) <- colnames(boruta.train$ImpHistory)
+Labels <- sort(sapply(lz,median))
+axis(side = 1,las=2,labels = names(Labels),
+     at = 1:ncol(boruta.train$ImpHistory), cex.axis = 0.7)
+
+final.boruta <- TentativeRoughFix(boruta.train)
+print(final.boruta)
+
+boruta.df <- attStats(final.boruta)
+head(boruta.df)
+
+features=getSelectedAttributes(final.boruta, withTentative = F)
+features
+
+final.features=c("bhr","basedp","pkhr","X.mphr.b.","sbp","dp","maxhr","mbp",
+                 "dpmaxdo","age","gddpeakdp")
+my.features=mydata_sample[,features]
+
+my.features$H_insurance = mydata_sample$H_insurance
+
+###########################################
+
+# Logistic Regression Model
+
+###########################################
+
+mymodel =glm(H_insurance ~ .,data=my.features,family = "binomial")
+summary(mymodel)
+
+mymodel = glm(H_insurance ~.,data=my.features,family = "binomial")
+
+summary(mymodel)
+
+exp(mymodel$coefficients[c(3,29,69,70,72:76)])
+
+print(mymodel)
+
+exp(mymodel$coefficients[c(3,29,69,70,72:76)])
+# Print the model
+tab_model(mymodel)
+
+#########################################
+
+#Multinomial Logistic Regression
+
+#########################################
+
+install.packages("packagename",repos = "http://cran.us.r-project.org")
+
+require(foreign)
+require(nnet)
+require(ggplot2)
+require(reshape2)
+
+data$HINOTCOVE <- relevel(factor(data$HINOTCOVE), ref = "has health insurance coverage")
+test <- multinom(data$HINOTCOVE ~ data$RACEA + data$YRSINUS +
+                   data$SEX + data$MARST + data$EDUC)
+
+exp(mymodel$coefficients[c(3,29,69,70,72:76)])
+
+model = summary(test)
+z <- summary(test)$coefficients/summary(test)$standard.errors
+z
+
+exp(coef(test))
+head(pp <- fitted(test))
+
+dses <- data.frame(insurance = c("has health insurance coverage","Employed"),
+                   write = mean(mydata$write))
+
+plot(pressure)
+summary(cars)
+    
+
+
